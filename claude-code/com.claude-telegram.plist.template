@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claude-telegram</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__BUN_PATH__</string>
+        <string>__BOT_PATH__</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>__BUN_DIR__:__CLAUDE_DIR__:/usr/local/bin:/usr/bin:/bin</string>
+        <key>TELEGRAM_BOT_TOKEN</key>
+        <string>__TELEGRAM_BOT_TOKEN__</string>
+        <key>CLAUDE_BIN</key>
+        <string>__CLAUDE_BIN__</string>
+        <key>CLAUDE_CWD</key>
+        <string>__CLAUDE_CWD__</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>__CLAUDE_CWD__</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/server.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/server.error.log</string>
+</dict>
+</plist>
