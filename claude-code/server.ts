@@ -1,9 +1,6 @@
 import { Bot } from "grammy";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { randomUUID } from "crypto";
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import path from "path";
 
 const execFileAsync = promisify(execFile);
 
@@ -15,7 +12,7 @@ if (!TELEGRAM_BOT_TOKEN) {
 }
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
-const SESSION_FILE = path.join(process.env.HOME || "", ".claude/channels/telegram/session-id");
+const CLAUDE_CWD = process.env.CLAUDE_CWD || process.env.HOME;
 
 const bot = new Bot(TELEGRAM_BOT_TOKEN);
 
@@ -28,27 +25,21 @@ bot.on("message:text", async (ctx) => {
   try {
     await bot.api.sendChatAction(chatId, "typing");
 
-    let args: string[];
-    if (existsSync(SESSION_FILE)) {
-      const sessionId = readFileSync(SESSION_FILE, "utf8").trim();
-      args = ["--print", "--resume", sessionId, userText];
-    } else {
-      const sessionId = randomUUID();
-      args = ["--print", "--session-id", sessionId, "--name", "telegram-bot", userText];
-      writeFileSync(SESSION_FILE, sessionId, "utf8");
-    }
+    console.log(`[${new Date().toISOString()}] cwd=${CLAUDE_CWD}`);
 
-    const { stdout, stderr } = await execFileAsync(CLAUDE_BIN, args, {
+    const { stdout, stderr } = await execFileAsync(CLAUDE_BIN, ["--print", userText], {
       timeout: 120_000,
       maxBuffer: 1024 * 1024 * 4,
       stdio: ["ignore", "pipe", "pipe"],
+      cwd: CLAUDE_CWD,
     } as any);
 
     if (stderr) {
-      console.warn(`[${new Date().toISOString()}] claude stderr: ${stderr}`);
+      console.warn(`[${new Date().toISOString()}] stderr: ${stderr.trim()}`);
     }
 
     const reply = stdout.trim() || "(no response)";
+    console.log(`[${new Date().toISOString()}] response: ${reply.slice(0, 200)}`);
     await ctx.reply(reply);
     console.log(`[${new Date().toISOString()}] replied to ${chatId}`);
   } catch (err: any) {
