@@ -1,9 +1,6 @@
 import { Bot } from "grammy";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import { readFileSync, writeFileSync, existsSync } from "fs";
-
-const execFileAsync = promisify(execFile);
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -57,6 +54,39 @@ function parseJsonl(stdout: string): { threadId?: string; reply?: string } {
   return { threadId, reply };
 }
 
+function runCodex(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(CODEX_BIN, args, {
+      stdio: ["ignore", "pipe", "pipe"], // stdin=closed, stdout/stderr=buffered
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
+    proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+      reject(new Error(`codex timed out after 120s. stderr: ${stderr.trim()}`));
+    }, 120_000);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`codex exited ${code}. stderr: ${stderr.trim()}`));
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
 const bot = new Bot(TELEGRAM_BOT_TOKEN);
 
 bot.on("message:text", async (ctx) => {
@@ -86,10 +116,7 @@ bot.on("message:text", async (ctx) => {
       ];
     }
 
-    const { stdout, stderr } = await execFileAsync(CODEX_BIN, args, {
-      timeout: 120_000,
-      maxBuffer: 1024 * 1024 * 4,
-    } as any);
+    const { stdout, stderr } = await runCodex(args);
 
     if (stderr) {
       console.warn(`[${new Date().toISOString()}] stderr: ${stderr.trim()}`);
@@ -108,7 +135,7 @@ bot.on("message:text", async (ctx) => {
     console.log(`[${new Date().toISOString()}] replied to ${chatId}`);
   } catch (err: any) {
     console.error(`[${new Date().toISOString()}] error:`, err);
-    const detail = err?.stderr?.trim() || err?.message || "unknown error";
+    const detail = err?.message || "unknown error";
     await ctx.reply(`Codex encountered an error: ${detail}`);
   }
 });
