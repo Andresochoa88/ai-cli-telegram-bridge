@@ -1,6 +1,8 @@
 import { Bot } from "grammy";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { randomUUID } from "crypto";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,6 +15,26 @@ if (!TELEGRAM_BOT_TOKEN) {
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || "claude";
 const CLAUDE_CWD = process.env.CLAUDE_CWD || process.env.HOME;
+const SESSIONS_FILE = `${process.env.HOME}/.claude/channels/telegram/sessions.json`;
+
+// Load sessions from disk (survives daemon restarts)
+const sessions: Record<number, string> = (() => {
+  try {
+    if (existsSync(SESSIONS_FILE)) {
+      return JSON.parse(readFileSync(SESSIONS_FILE, "utf8"));
+    }
+  } catch {}
+  return {};
+})();
+
+function saveSession(chatId: number, sessionId: string) {
+  sessions[chatId] = sessionId;
+  try {
+    writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2), "utf8");
+  } catch (err) {
+    console.warn(`[${new Date().toISOString()}] could not save session:`, err);
+  }
+}
 
 const bot = new Bot(TELEGRAM_BOT_TOKEN);
 
@@ -27,7 +49,19 @@ bot.on("message:text", async (ctx) => {
 
     console.log(`[${new Date().toISOString()}] cwd=${CLAUDE_CWD}`);
 
-    const { stdout, stderr } = await execFileAsync(CLAUDE_BIN, ["--print", userText], {
+    let args: string[];
+    const existingSession = sessions[chatId];
+    if (existingSession) {
+      console.log(`[${new Date().toISOString()}] resuming session ${existingSession}`);
+      args = ["--print", "--resume", existingSession, userText];
+    } else {
+      const sessionId = randomUUID();
+      saveSession(chatId, sessionId);
+      console.log(`[${new Date().toISOString()}] new session ${sessionId}`);
+      args = ["--print", "--session-id", sessionId, userText];
+    }
+
+    const { stdout, stderr } = await execFileAsync(CLAUDE_BIN, args, {
       timeout: 120_000,
       maxBuffer: 1024 * 1024 * 4,
       stdio: ["ignore", "pipe", "pipe"],

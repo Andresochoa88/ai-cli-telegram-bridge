@@ -32,7 +32,7 @@ bot.on("message:text", async (ctx) => {
 
     const { stderr } = await execFileAsync(
       CODEX_BIN,
-      ["exec", userText, "-C", CODEX_CWD, "-o", tmpFile, "--ephemeral"],
+      ["exec", userText, "-C", CODEX_CWD, "-o", tmpFile, "--ephemeral", "--skip-git-repo-check"],
       {
         timeout: 120_000,
         maxBuffer: 1024 * 1024 * 4,
